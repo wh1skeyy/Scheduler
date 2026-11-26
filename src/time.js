@@ -1,6 +1,6 @@
 // Date and scheduling helpers. Calendar arithmetic is anchored to UTC, while
 // wall-clock values are always read in the timezone supplied by config.js.
-import { TIMEZONE } from "./config.js?v=3";
+import { TIMEZONE } from "./config.js";
 
 const formatterCache = new Map();
 

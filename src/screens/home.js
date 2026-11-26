@@ -1,13 +1,13 @@
-import { API_MODE } from "../api.js?v=3";
-import { BRAND_NAME, CONTACT } from "../config.js?v=3";
-import { durationLabel, formatLiveClock, formatLiveDate } from "../time.js?v=3";
+import { API_MODE } from "../api.js";
+import { BRAND_NAME, CONTACT } from "../config.js";
+import { durationLabel, formatLiveClock, formatLiveDate } from "../time.js";
 import {
   escapeHTML,
   icon,
   statusPanelMarkup,
   trapFocus,
-} from "../ui.js?v=3";
-import { TYPE_META, TYPE_ORDER } from "./booking-shell.js?v=3";
+} from "../ui.js";
+import { TYPE_META, TYPE_ORDER } from "./booking-shell.js";
 
 function contactDetailsMarkup() {
   const field = (label, value, extra = "") =>

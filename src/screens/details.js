@@ -1,7 +1,7 @@
-import { CLOCK_LABEL } from "../config.js?v=3";
-import { formatResultDate, minutesToTime } from "../time.js?v=3";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js?v=3";
-import { bookingShell, bookingTitle } from "./booking-shell.js?v=3";
+import { CLOCK_LABEL } from "../config.js";
+import { formatResultDate, minutesToTime } from "../time.js";
+import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
+import { bookingShell, bookingTitle } from "./booking-shell.js";
 
 function inputField({ key, label, type = "text", value = "", required = false, autocomplete = "off", maxlength = 160, placeholder = "" }) {
   return `<label class="field"><span>${escapeHTML(label)}${required ? " *" : ""}</span><input name="${escapeHTML(key)}" type="${escapeHTML(type)}" value="${escapeHTML(value)}" ${required ? "required" : ""} autocomplete="${escapeHTML(autocomplete)}" maxlength="${maxlength}" placeholder="${escapeHTML(placeholder)}"></label>`;

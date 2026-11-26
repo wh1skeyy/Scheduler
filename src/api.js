@@ -1,12 +1,12 @@
 // The only module that talks to Google Apps Script. POST uses text/plain so
 // the browser does not issue a CORS preflight request.
-import { API_URL } from "./config.js?v=3";
+import { API_URL } from "./config.js";
 import {
   demoCheck,
   demoCreateBooking,
   getDemoConfig,
   getDemoWeek,
-} from "./demo-data.js?v=3";
+} from "./demo-data.js";
 
 export const API_MODE = API_URL.trim() ? "live" : "demo";
 const REQUEST_TIMEOUT = 20_000;
@@ -142,15 +142,7 @@ export async function checkAccess(type, credential) {
   // trusted — and rate-limit check attempts (e.g. 5 failed attempts per
   // type per IP per 15 minutes, then a lockout message), so codes and
   // passwords cannot be brute-forced through this endpoint.
-  return request(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({
-      action: "check",
-      type,
-      [type === "lesson" ? "code" : "pw"]: credential,
-    }),
-  });
+  return request(endpoint({ action: "check", type, [type === "lesson" ? "code" : "pw"]: credential }));
 }
 
 export async function createBooking(payload) {

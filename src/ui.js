@@ -1,5 +1,5 @@
 // Small, dependency-free rendering helpers shared by all screens.
-import { CLOCK_LABEL, TIMEZONE } from "./config.js?v=3";
+import { CLOCK_LABEL, TIMEZONE } from "./config.js";
 import {
   blockLabel,
   findNextFreeInWeek,
@@ -9,11 +9,11 @@ import {
   minutesToTime,
   nowMinutes,
   todayKey,
-} from "./time.js?v=3";
+} from "./time.js";
 
 // Re-export the live formatters for compatibility with early cached builds of
 // the home screen. Their canonical home is time.js; new code imports them there.
-export { formatLiveClock, formatLiveDate } from "./time.js?v=3";
+export { formatLiveClock, formatLiveDate } from "./time.js";
 
 export function escapeHTML(value) {
   return String(value ?? "")

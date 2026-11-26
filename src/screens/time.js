@@ -1,13 +1,13 @@
-import { CLOCK_LABEL } from "../config.js?v=3";
+import { CLOCK_LABEL } from "../config.js";
 import {
   durationLabel,
   findNextFreeStart,
   formatResultDate,
   getSlotStatus,
   minutesToTime,
-} from "../time.js?v=3";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js?v=3";
-import { bookingShell, bookingTitle } from "./booking-shell.js?v=3";
+} from "../time.js";
+import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
+import { bookingShell, bookingTitle } from "./booking-shell.js";
 
 function fixedDurations(rule) {
   if (Array.isArray(rule.fixed)) return rule.fixed;

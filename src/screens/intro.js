@@ -1,8 +1,8 @@
-import { API_MODE } from "../api.js?v=3";
-import { checkAccess } from "../api.js?v=3";
-import { durationLabel } from "../time.js?v=3";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js?v=3";
-import { bookingShell, bookingTitle, TYPE_META } from "./booking-shell.js?v=3";
+import { API_MODE } from "../api.js";
+import { checkAccess } from "../api.js";
+import { durationLabel } from "../time.js";
+import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
+import { bookingShell, bookingTitle, TYPE_META } from "./booking-shell.js";
 
 function fixedDurations(rule) {
   if (Array.isArray(rule.fixed)) return rule.fixed;

@@ -23,7 +23,7 @@ import {
   nowMinutes,
   startOfWeek,
   todayKey,
-} from "./time.js?v=3";
+} from "./time.js";
 
 /**
  * Main application class managing booking flow state and rendering.
