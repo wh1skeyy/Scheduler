@@ -1,0 +1,186 @@
+diff --git a/DESIGN.md b/DESIGN.md
+index 727c6c0..2e1a3d8 100644
+--- a/DESIGN.md
++++ b/DESIGN.md
+@@ -196,4 +196,12 @@ The shape vocabulary is strictly architectural and restrained:
+ ### Cards & Reservation Sheets
+ - Encased in 90% opaque white backdrops with 12px blur.
+ - Outer border 1px `rgba(10, 10, 10, 0.12)` with 4px corner radius.
+-- Padding structured strictly on the spacing scale (`space-lg` desktop, `space-md` mobile).
+\ No newline at end of file
++- Padding structured strictly on the spacing scale (`space-lg` desktop, `space-md` mobile).
++
++## Media and Glass (overrides the solid-white rules wherever background media is present)
++
++- Every booking type has a full-bleed background image or video. The white overlay on media is at most 30%. Never wash media out to near white.
++- Panels over media are glass: white at about 58% opacity, 18px backdrop blur with saturation 1.6, a 1px white border at 70% opacity, a subtle inner top highlight and a soft shadow (0 8px 32px at 8% black). Text-dense panels (contact, status, sheets, forms) may use up to 78% white for legibility. Solid white panels are for content-only screens.
++- Layout: four corner labels as flat bracketed text (date top-left, contact top-right, visual toggle bottom-left, current status bottom-right); brand card top-left; selection list right of centre; the Priority row carries a lock icon beside its ACCESS text.
++- Copy discipline: the main page shows only number, title and ACCESS per type. Approval rules, durations and descriptions appear only after a type is opened. Do not add demo chips, status tags or descriptive lines that are not in the design.
++- Reference material: always use Stitch screenshots that show the background media and the monospace font. A screenshot with a serif font or no background is a failed capture and must not be used as a reference.
+diff --git a/src/config.js b/src/config.js
+index e877b1a..35e8960 100644
+--- a/src/config.js
++++ b/src/config.js
+@@ -16,5 +16,5 @@ export const CONTACT = {
+ };
+ 
+ // Use a valid IANA timezone and the short label shown beside every time.
+-export const TIMEZONE = "UTC";
+-export const CLOCK_LABEL = "UTC";
++export const TIMEZONE = "Asia/Ho_Chi_Minh";
++export const CLOCK_LABEL = "ICT";
+diff --git a/src/screens/home.js b/src/screens/home.js
+index c31a58a..fdb837b 100644
+--- a/src/screens/home.js
++++ b/src/screens/home.js
+@@ -9,13 +9,6 @@ import {
+ } from "../ui.js";
+ import { TYPE_META, TYPE_ORDER } from "./booking-shell.js";
+ 
+-const CARD_COPY = {
+-  work: "Focused project scoping, design review and technical alignment.",
+-  lesson: "One-to-one learning, guided practice and practical feedback.",
+-  hangout: "A conversation, collaborative workshop or team sync.",
+-  priority: "Urgent, private access with an instant booking decision.",
+-};
+-
+ function contactDetailsMarkup() {
+   const githubHref = /^https?:\/\//i.test(CONTACT.GITHUB)
+     ? CONTACT.GITHUB
+@@ -34,23 +27,23 @@ function brandMarkup(mobile = false) {
+     <div class="brand-card__meta"><span>${escapeHTML(BRAND_NAME)}</span><span>[SCH_01]</span></div>
+     <p class="brand-card__email">${escapeHTML(CONTACT.EMAIL)}</p>
+     <p>pick a type, choose a day, get a schedule.</p>
+-    ${mobile ? '<div class="brand-card__foot"><span><i class="status-dot"></i>SLOTS_OPEN</span><span data-clock-label></span></div>' : ""}
++    
+   </header>`;
+ }
+ 
+ function desktopRows(app) {
+   const rowMeta = {
+     work: "ACCESS",
+-    lesson: "1H30 // 2H",
++    lesson: "ACCESS",
+     hangout: "ACCESS",
+-    priority: `lock // ACCESS`,
++    priority: "ACCESS",
+   };
+   return TYPE_ORDER.map((type) => {
+     const meta = TYPE_META[type];
+     const disabled = app.state.loading || app.state.offline;
+     return `<button class="booking-row ${type === "work" ? "is-active" : ""}" type="button" data-type="${type}" ${disabled ? "disabled" : ""}>
+-      <span class="booking-row__title"><span class="booking-row__number">${meta.number}</span><span>${meta.label}</span>${type === "priority" ? icon("lock", "row-lock") : ""}</span>
+-      <span class="booking-row__access"><span>${rowMeta[type]}</span><span aria-hidden="true">→</span></span>
++      <span class="booking-row__title"><span class="booking-row__number">${meta.number}</span><span>${meta.label}</span></span>
++      <span class="booking-row__access">${type === "priority" ? icon("lock", "row-lock") : ""}<span>${rowMeta[type]}</span><span aria-hidden="true">→</span></span>
+     </button>`;
+   }).join("");
+ }
+@@ -64,14 +57,13 @@ function mobilePages(app) {
+       : `UP TO ${durationLabel(rule.max)}`;
+     return `<section class="mobile-page" data-page-type="${type}" data-page-index="${index}" aria-labelledby="mobile-title-${type}">
+       <div class="mobile-page__inner">
+-        ${index === 0 ? `<div class="mobile-brand-wrap">${brandMarkup(true)}</div>` : `<div class="mobile-context"><span>${meta.number} // PERSONAL SCHEDULE</span><span>${type === "priority" ? "KEY_REQUIRED" : "OPEN_INDEX"}</span></div>`}
++        ${index === 0 ? `<div class="mobile-brand-wrap">${brandMarkup(true)}</div>` : ""}
+         <div class="mobile-page__spacer"></div>
+         <article class="mobile-booking-card glass">
+-          <div class="mobile-booking-card__meta"><span>${meta.number} // ${String(TYPE_ORDER.length).padStart(2, "0")}</span><span class="${type === "priority" ? "restricted" : ""}">${type === "priority" ? `${icon("lock")} RESTRICTED` : rule.approval ? "NEEDS APPROVAL" : "INSTANT"}</span></div>
++          <div class="mobile-booking-card__meta"><span>${meta.number} // ${String(TYPE_ORDER.length).padStart(2, "0")}</span></div>
+           <h2 id="mobile-title-${type}">${meta.label}</h2>
+-          <div class="mobile-booking-card__access"><span>${type === "priority" ? `${icon("lock")} ACCESS` : "ACCESS"}</span><span>${escapeHTML(durations)}</span></div>
+-          <p>${CARD_COPY[type]}</p>
+-          <button class="button button--primary" type="button" data-type="${type}" ${app.state.loading || app.state.offline ? "disabled" : ""} aria-label="Open ${meta.label.toLowerCase()} booking"><span>OPEN</span><span class="button__sub">SELECT ${icon("arrow")}</span></button>
++          <div class="mobile-booking-card__access"><span>${type === "priority" ? `${icon("lock")} ACCESS` : "ACCESS"}</span></div>
++          <button class="button button--primary" type="button" data-type="${type}" ${app.state.loading || app.state.offline ? "disabled" : ""} aria-label="Open ${meta.label.toLowerCase()} booking"><span>OPEN</span><span aria-hidden="true">→</span></button>
+         </article>
+       </div>
+     </section>`;
+diff --git a/styles.css b/styles.css
+index 11dd395..b1ada05 100644
+--- a/styles.css
++++ b/styles.css
+@@ -9,7 +9,8 @@
+   --muted: #545454;
+   --hairline: rgba(10, 10, 10, 0.12);
+   --hairline-strong: rgba(10, 10, 10, 0.24);
+-  --glass: rgba(255, 255, 255, 0.9);
++  --glass: rgba(255, 255, 255, 0.58);
++  --glass-strong: rgba(255, 255, 255, 0.78);
+   --glass-low: rgba(255, 255, 255, 0.58);
+   --glass-blur: blur(18px) saturate(1.6);
+   --surface: #f9f9f9;
+@@ -232,9 +233,7 @@ legend {
+   position: absolute;
+   inset: 0;
+   z-index: 3;
+-  background: rgba(255, 255, 255, 0.74);
+-  backdrop-filter: blur(2px);
+-  -webkit-backdrop-filter: blur(2px);
++  background: rgba(255, 255, 255, 0.3);
+ }
+ 
+ @keyframes media-drift {
+@@ -256,7 +255,8 @@ legend {
+   background: var(--glass);
+   backdrop-filter: var(--glass-blur);
+   -webkit-backdrop-filter: var(--glass-blur);
+-  border: 1px solid var(--hairline);
++  border: 1px solid rgba(255, 255, 255, 0.7);
++  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 32px rgba(10, 10, 10, 0.08);
+   border-radius: var(--radius);
+ }
+ 
+@@ -909,6 +909,7 @@ legend {
+ 
+ .desktop-bottom {
+   align-items: center;
++  padding-bottom: 44px;
+ }
+ 
+ .brand-card {
+@@ -991,7 +992,7 @@ legend {
+   width: 100%;
+   min-height: 72px;
+   padding: 16px 24px;
+-  background: #fff;
++  background: transparent;
+   color: var(--ink);
+   text-align: left;
+   font: var(--headline-lg);
+@@ -1085,7 +1086,6 @@ legend {
+   font: var(--label);
+   letter-spacing: 0.04em;
+   color: var(--muted);
+-  background: rgba(255, 255, 255, 0.8);
+ }
+ 
+ /* ===== Home: mobile ====================================================== */
+@@ -1177,6 +1177,8 @@ legend {
+ }
+ 
+ .brand-card--mobile {
++  width: 100%;
++  max-width: 100%;
+   padding: 16px;
+ }
+ 
+@@ -2179,3 +2181,19 @@ legend {
+     transform: scale(1.04);
+   }
+ }
++
++
++/* ===== Glass legibility for text-dense panels ============================ */
++.corner-panel.glass,
++.mobile-sheet.glass,
++.booking-shell.glass {
++  background: var(--glass-strong);
++}
++
++@media (max-width: 1023px) {
++  .demo-badge {
++    left: 44px;
++    bottom: 28px;
++    transform: none;
++  }
++}
