@@ -1,5 +1,5 @@
 // Small, dependency-free rendering helpers shared by all screens.
-import { CLOCK_LABEL, TIMEZONE } from "./config.js";
+import { CLOCK_LABEL, TIMEZONE } from "./config.js?v=3";
 import {
   blockLabel,
   findNextFreeInWeek,
@@ -9,11 +9,11 @@ import {
   minutesToTime,
   nowMinutes,
   todayKey,
-} from "./time.js";
+} from "./time.js?v=3";
 
 // Re-export the live formatters for compatibility with early cached builds of
 // the home screen. Their canonical home is time.js; new code imports them there.
-export { formatLiveClock, formatLiveDate } from "./time.js";
+export { formatLiveClock, formatLiveDate } from "./time.js?v=3";
 
 export function escapeHTML(value) {
   return String(value ?? "")
@@ -90,8 +90,14 @@ export function legendMarkup() {
   return `<div class="timeline-legend"><span><i class="legend-swatch is-occupied"></i>HATCHED: OCCUPIED</span><span><i class="legend-swatch is-pending"></i>DASHED: PENDING</span><span><i class="legend-swatch"></i>EMPTY: FREE</span></div>`;
 }
 
-export function statusPanelMarkup(week, config, now = new Date()) {
-  if (!week) return '<p class="muted">Loading the current week…</p>';
+export function statusPanelMarkup(week, config, now = new Date(), { offline = false, nextWeek = null } = {}) {
+  // Distinguish "still loading" from "the API is down": when offline the
+  // panel must say Unavailable, not keep promising that data is loading.
+  if (!week) {
+    return offline
+      ? '<p class="muted">Unavailable — live data could not be loaded.</p>'
+      : '<p class="muted">Loading the current week…</p>';
+  }
   const timeZone = config?.timeZone || TIMEZONE;
   const today = todayKey(now, timeZone);
   const minutes = nowMinutes(now, timeZone);
@@ -112,7 +118,7 @@ export function statusPanelMarkup(week, config, now = new Date()) {
         })
         .join("");
       const nowLine = isToday
-        ? `<div class="status__now" style="left:${(minutes / 1440) * 100}%" title="Now ${minutesToTime(minutes)} ${escapeHTML(CLOCK_LABEL)}"></div>`
+        ? `<div class="status__now" data-now-line style="left:${(minutes / 1440) * 100}%" title="Now ${minutesToTime(minutes)} ${escapeHTML(CLOCK_LABEL)}"></div>`
         : "";
       const dayLabel = new Intl.DateTimeFormat("en-GB", {
         timeZone: "UTC",
@@ -125,21 +131,25 @@ export function statusPanelMarkup(week, config, now = new Date()) {
     })
     .join("");
 
-  const next = findNextFreeInWeek(week, {
-    ...config,
-    duration: config?.step ?? 30,
-    today,
-    now,
-    timeZone,
-  });
+  const next = findNextFreeInWeek(
+    week,
+    {
+      ...config,
+      duration: config?.step ?? 30,
+      today,
+      now,
+      timeZone,
+    },
+    nextWeek,
+  );
   const todayStr = todayKey(now, timeZone);
   const nextText = next
     ? `NEXT FREE: ${next.date === todayStr ? "TODAY" : formatShortDate(next.date)} ${minutesToTime(next.start)} ${escapeHTML(CLOCK_LABEL)}`
     : "NEXT FREE: NONE THIS WEEK";
 
   return `<div class="status-panel__heading"><span class="status-panel__title">WEEK ${escapeHTML(weekRange)}</span><span class="status-panel__grid">[GRID 24H]</span></div>
-    <div class="status-days" role="status" aria-live="polite" aria-atomic="true">${dayRows}</div>
-    <div class="status-panel__footer"><strong>${escapeHTML(clock)} // ${escapeHTML(nextText)}</strong><span>LEGEND: HATCHED: OCCUPIED // DASHED: PENDING</span></div>`;
+    <div class="status-days">${dayRows}</div>
+    <div class="status-panel__footer"><strong data-status-footer>${escapeHTML(clock)} // ${escapeHTML(nextText)}</strong><span>LEGEND: HATCHED: OCCUPIED // DASHED: PENDING</span></div>`;
 }
 
 export function formatClockWithLabel(now = new Date()) {

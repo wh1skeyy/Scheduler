@@ -1,12 +1,8 @@
 // Date and scheduling helpers. Calendar arithmetic is anchored to UTC, while
 // wall-clock values are always read in the timezone supplied by config.js.
-import { TIMEZONE } from "./config.js";
+import { TIMEZONE } from "./config.js?v=3";
 
 const formatterCache = new Map();
-
-// Per-frame cache for getZonedParts to avoid redundant Intl.DateTimeFormat calls
-let zonedPartsCache = new Map();
-let lastCacheFrame = 0;
 
 function getFormatter(timeZone) {
   if (!formatterCache.has(timeZone)) {
@@ -28,34 +24,23 @@ function getFormatter(timeZone) {
   return formatterCache.get(timeZone);
 }
 
-function getCachedZonedParts(date, timeZone) {
-  const now = performance.now();
-  // Reset cache every frame (roughly 16ms)
-  if (now - lastCacheFrame > 16) {
-    zonedPartsCache.clear();
-    lastCacheFrame = now;
-  }
-  const key = `${date.getTime()}-${timeZone}`;
-  if (!zonedPartsCache.has(key)) {
-    const values = {};
-    for (const part of getFormatter(timeZone).formatToParts(date)) {
-      if (part.type !== "literal") values[part.type] = part.value;
-    }
-    zonedPartsCache.set(key, {
-      year: Number(values.year),
-      month: Number(values.month),
-      day: Number(values.day),
-      hour: Number(values.hour) % 24,
-      minute: Number(values.minute),
-      second: Number(values.second),
-      weekday: values.weekday,
-    });
-  }
-  return zonedPartsCache.get(key);
-}
-
 export function getZonedParts(date = new Date(), timeZone = TIMEZONE) {
-  return getCachedZonedParts(date, timeZone);
+  // The Intl formatter itself is cached (formatterCache above); the
+  // per-frame Map that used to wrap this call was removed — it saved
+  // almost nothing and added a performance.now() check on every call.
+  const values = {};
+  for (const part of getFormatter(timeZone).formatToParts(date)) {
+    if (part.type !== "literal") values[part.type] = part.value;
+  }
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour) % 24,
+    minute: Number(values.minute),
+    second: Number(values.second),
+    weekday: values.weekday,
+  };
 }
 
 export function pad(value) {
@@ -324,14 +309,21 @@ export function getLiveStatus(
   };
 }
 
-export function findNextFreeInWeek(week, options) {
+export function findNextFreeInWeek(week, options, nextWeek = null) {
+  // options.nextWeek is accepted as well, so callers that already build an
+  // options object do not need a third argument.
+  const extra = nextWeek || options?.nextWeek || null;
   const today = options.today || todayKey(options.now, options.timeZone);
   const currentMinutes = nowMinutes(options.now, options.timeZone);
-  for (const day of week?.days || []) {
-    if (day.date < today) continue;
-    const from = day.date === today ? ceilToStep(currentMinutes, options.step) : 0;
-    const start = findNextFreeStart(day, from, options.duration || options.step, options);
-    if (start !== null) return { date: day.date, start };
+  // Search this week first, then next week, so a late-Sunday visitor is
+  // offered Monday morning instead of "NONE THIS WEEK".
+  for (const candidateWeek of [week, extra]) {
+    for (const day of candidateWeek?.days || []) {
+      if (day.date < today) continue;
+      const from = day.date === today ? ceilToStep(currentMinutes, options.step) : 0;
+      const start = findNextFreeStart(day, from, options.duration || options.step, options);
+      if (start !== null) return { date: day.date, start };
+    }
   }
   return null;
 }

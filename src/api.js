@@ -1,12 +1,12 @@
 // The only module that talks to Google Apps Script. POST uses text/plain so
 // the browser does not issue a CORS preflight request.
-import { API_URL } from "./config.js";
+import { API_URL } from "./config.js?v=3";
 import {
   demoCheck,
   demoCreateBooking,
   getDemoConfig,
   getDemoWeek,
-} from "./demo-data.js";
+} from "./demo-data.js?v=3";
 
 export const API_MODE = API_URL.trim() ? "live" : "demo";
 const REQUEST_TIMEOUT = 20_000;
@@ -94,13 +94,37 @@ export async function getConfig() {
   return validateConfig(await request(endpoint({ action: "config" })));
 }
 
-export async function getWeek(from) {
-  if (API_MODE === "demo") return getDemoWeek(from);
-  const week = await request(endpoint({ action: "week", from }));
-  if (!Array.isArray(week?.days)) {
-    throw new ApiError("The booking service returned an incomplete week.");
+// Brief in-memory cache for week data (60 s): the home status panel, the
+// booking prefetch and a week refresh can all ask for the same week within
+// seconds of each other. Callers get a clone, so no one can mutate the
+// cached copy. Pass { force: true } to bypass it after a booking / conflict.
+const WEEK_CACHE_MS = 60_000;
+const weekCache = new Map();
+function cloneWeek(week) {
+  return JSON.parse(JSON.stringify(week));
+}
+export function clearWeekCache() {
+  weekCache.clear();
+}
+
+export async function getWeek(from, { force = false } = {}) {
+  const key = `${API_MODE}:${from}`;
+  const cached = weekCache.get(key);
+  if (!force && cached && Date.now() - cached.at < WEEK_CACHE_MS) {
+    return cloneWeek(cached.week);
   }
-  return week;
+  const week =
+    API_MODE === "demo"
+      ? await getDemoWeek(from)
+      : await (async () => {
+          const data = await request(endpoint({ action: "week", from }));
+          if (!Array.isArray(data?.days)) {
+            throw new ApiError("The booking service returned an incomplete week.");
+          }
+          return data;
+        })();
+  weekCache.set(key, { week: cloneWeek(week), at: Date.now() });
+  return cloneWeek(week);
 }
 
 export async function checkAccess(type, credential) {
@@ -109,20 +133,38 @@ export async function checkAccess(type, credential) {
     if (result.err) throw new ApiError(result.err, { payload: result });
     return result;
   }
-  const params = { action: "check", type };
-  params[type === "lesson" ? "code" : "pw"] = credential;
-  return request(endpoint(params));
+  // Credentials travel in the POST body, never in a URL query string
+  // (URLs are logged by browsers, proxies and the Apps Script dashboard).
+  // BACKEND CHANGE REQUIRED: the Apps Script endpoint must now accept
+  // POST { action: "check", type, code? | pw? } instead of GET
+  // ?action=check&... . It must re-verify the credential on every
+  // createBooking call too — the front end's "verified" flag is not
+  // trusted — and rate-limit check attempts (e.g. 5 failed attempts per
+  // type per IP per 15 minutes, then a lockout message), so codes and
+  // passwords cannot be brute-forced through this endpoint.
+  return request(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({
+      action: "check",
+      type,
+      [type === "lesson" ? "code" : "pw"]: credential,
+    }),
+  });
 }
 
 export async function createBooking(payload) {
   if (API_MODE === "demo") {
     const result = await demoCreateBooking(payload);
     if (result.err) throw new ApiError(result.err, { payload: result });
+    clearWeekCache();
     return result;
   }
-  return request(API_URL, {
+  const result = await request(API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
     body: JSON.stringify(payload),
   });
+  clearWeekCache();
+  return result;
 }

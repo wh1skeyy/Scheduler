@@ -1,13 +1,13 @@
-import { API_MODE } from "../api.js";
-import { BRAND_NAME, CONTACT } from "../config.js";
-import { durationLabel, formatLiveClock, formatLiveDate } from "../time.js";
+import { API_MODE } from "../api.js?v=3";
+import { BRAND_NAME, CONTACT } from "../config.js?v=3";
+import { durationLabel, formatLiveClock, formatLiveDate } from "../time.js?v=3";
 import {
   escapeHTML,
   icon,
   statusPanelMarkup,
   trapFocus,
-} from "../ui.js";
-import { TYPE_META, TYPE_ORDER } from "./booking-shell.js";
+} from "../ui.js?v=3";
+import { TYPE_META, TYPE_ORDER } from "./booking-shell.js?v=3";
 
 function contactDetailsMarkup() {
   const field = (label, value, extra = "") =>
@@ -46,19 +46,13 @@ function brandMarkup(mobile = false) {
 }
 
 function desktopRows(app) {
-  const rowMeta = {
-    work: "ACCESS",
-    lesson: "ACCESS",
-    hangout: "ACCESS",
-    priority: "ACCESS",
-  };
   return TYPE_ORDER.map((type) => {
     const meta = TYPE_META[type];
     const disabled = app.state.offline;
     const isActive = type === "priority";
     return `<button class="booking-row ${isActive ? "is-active" : ""}" type="button" data-type="${type}" ${disabled ? "disabled" : ""} ${isActive ? 'aria-current="true"' : ""}>
       <span class="booking-row__title"><span class="booking-row__number">${meta.number}</span><span>${meta.label}</span></span>
-      <span class="booking-row__access">${type === "priority" ? icon("lock", "row-lock") : ""}<span>${rowMeta[type]}</span>${icon("arrowLong", "row-arrow")}</span>
+      <span class="booking-row__access">${type === "priority" ? icon("lock", "row-lock") : ""}<span>ACCESS</span>${icon("arrowLong", "row-arrow")}</span>
     </button>`;
   }).join("");
 }
@@ -110,7 +104,7 @@ export function renderHome(app) {
       </div>
       <div class="corner corner--bl"><button class="corner-button" type="button" data-visual-toggle aria-pressed="${app.media.playing}">[VISUAL // TOGGLE]</button></div>
       <div class="corner corner--br" data-corner="status">
-        <div id="status-panel" class="corner-panel corner-panel--status glass">${statusPanelMarkup(app.state.currentWeek, app.state.config, now)}</div>
+        <div id="status-panel" class="corner-panel corner-panel--status glass" data-status-panel>${statusPanelMarkup(app.state.currentWeek, app.state.config, now, { offline: app.state.offline, nextWeek: app.state.nextWeek })}</div>
         <button class="corner-button" type="button" aria-expanded="false" aria-controls="status-panel" data-corner-toggle="status">[CURRENT // STATUS]</button>
       </div>
       ${systemBanner(app)}
@@ -118,7 +112,7 @@ export function renderHome(app) {
 
     <section class="home-mobile" aria-label="Booking index">
       <nav class="page-indicator dash-indicator" aria-label="Page indicator">
-        ${TYPE_ORDER.map((type, index) => `<button class="dash-item${index === 0 ? " active" : ""}" type="button" data-page-jump="${index}" ${index === 0 ? 'aria-current="page"' : ""}><span></span></button>`).join("")}
+        ${TYPE_ORDER.map((type, index) => `<button class="dash-item${index === 0 ? " active" : ""}" type="button" data-page-jump="${index}" aria-label="Go to ${TYPE_META[type].label} page" ${index === 0 ? 'aria-current="page"' : ""}><span></span></button>`).join("")}
       </nav>
       <div class="mobile-snap" tabindex="0" role="list" aria-label="Booking types. Scroll or use up and down arrow keys.">${mobilePages(app)}</div>
       <button class="menu-trigger glass" type="button" data-menu-trigger aria-label="Open schedule menu" aria-expanded="false" aria-controls="mobile-sheet"><span></span><span></span><span></span></button>
@@ -133,8 +127,6 @@ export function renderHome(app) {
   desktopRowsElements.forEach((row) => {
     const activate = () => {
       desktopRowsElements.forEach((item) => item.classList.toggle("is-active", item === row));
-      // Don't switch video on hover/focus - keep it fixed to priority
-      // app.media.setActive(row.dataset.type);
     };
     row.addEventListener("pointerenter", activate);
     row.addEventListener("focus", activate);
@@ -145,6 +137,7 @@ export function renderHome(app) {
   const indicators = Array.from(app.root.querySelectorAll("[data-page-jump]"));
   let currentPage = 0;
   let sheetOpen = false;
+  let sheetCloseTimer = 0;
   let currentSheetView = "menu";
   let lastFocus = null;
   const sheet = app.root.querySelector("#mobile-sheet");
@@ -162,8 +155,6 @@ export function renderHome(app) {
     pages.forEach((page, pageIndex) => {
       page.classList.toggle("is-current", pageIndex === index);
     });
-    // Don't switch video on scroll - keep it fixed to priority
-    // app.media.setActive(TYPE_ORDER[index]);
   }
 
   function jumpToPage(index) {
@@ -220,7 +211,7 @@ export function renderHome(app) {
     }
     if (view === "status") {
       // Ensure week data is loaded; statusPanelMarkup handles null week gracefully
-      return `${header}<div class="sheet-heading"><button class="text-button" type="button" data-sheet-action="menu">${icon("back")}BACK</button><h2>[CURRENT // STATUS]</h2><button class="icon-button" type="button" data-sheet-action="close" aria-label="Close menu">${icon("close")}</button></div><div class="mobile-status-summary"><span class="status-dot"></span><strong data-current-status>FREE NOW</strong></div>${statusPanelMarkup(app.state.currentWeek, app.state.config, new Date())}`;
+      return `${header}<div class="sheet-heading"><button class="text-button" type="button" data-sheet-action="menu">${icon("back")}BACK</button><h2>[CURRENT // STATUS]</h2><button class="icon-button" type="button" data-sheet-action="close" aria-label="Close menu">${icon("close")}</button></div><div class="mobile-status-summary"><span class="status-dot"></span><strong data-current-status>CHECKING…</strong></div><div data-status-panel>${statusPanelMarkup(app.state.currentWeek, app.state.config, new Date(), { offline: app.state.offline, nextWeek: app.state.nextWeek })}</div>`;
     }
     return `${header}<div class="sheet-date"><span data-live-date>${formatLiveDate(new Date(), app.timeZone)}</span><span data-live-clock>${formatLiveClock(new Date())} ${escapeHTML(app.clockLabel)}</span></div>
       <div class="sheet-quick-links">${TYPE_ORDER.map((type, index) => `<button type="button" data-sheet-jump="${index}"><span>0${index + 1} //</span><strong>${TYPE_META[type].label}</strong></button>`).join("")}</div>
@@ -240,6 +231,8 @@ export function renderHome(app) {
   }
 
   function openSheet(view = "menu") {
+    // A close started <250 ms ago must not hide the sheet we just opened.
+    clearTimeout(sheetCloseTimer);
     lastFocus = document.activeElement;
     sheetOpen = true;
     sheet.hidden = false;
@@ -258,7 +251,8 @@ export function renderHome(app) {
     menuTrigger.setAttribute("aria-label", "Open schedule menu");
     menuTrigger.classList.remove("is-open");
     document.body.classList.remove("sheet-open");
-    setTimeout(() => {
+    clearTimeout(sheetCloseTimer);
+    sheetCloseTimer = setTimeout(() => {
       sheet.hidden = true;
       backdrop.hidden = true;
       sheet.classList.remove("sheet-closing");
@@ -329,6 +323,7 @@ export function renderHome(app) {
   app.syncMediaControls();
 
   return () => {
+    clearTimeout(sheetCloseTimer);
     observer.disconnect();
     document.body.classList.remove("sheet-open");
     if (sheetOpen && currentSheetView) closeSheet(false);

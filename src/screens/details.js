@@ -1,7 +1,7 @@
-import { CLOCK_LABEL } from "../config.js";
-import { formatResultDate, minutesToTime } from "../time.js";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
-import { bookingShell, bookingTitle } from "./booking-shell.js";
+import { CLOCK_LABEL } from "../config.js?v=3";
+import { formatResultDate, minutesToTime } from "../time.js?v=3";
+import { escapeHTML, focusScreenTitle, icon } from "../ui.js?v=3";
+import { bookingShell, bookingTitle } from "./booking-shell.js?v=3";
 
 function inputField({ key, label, type = "text", value = "", required = false, autocomplete = "off", maxlength = 160, placeholder = "" }) {
   return `<label class="field"><span>${escapeHTML(label)}${required ? " *" : ""}</span><input name="${escapeHTML(key)}" type="${escapeHTML(type)}" value="${escapeHTML(value)}" ${required ? "required" : ""} autocomplete="${escapeHTML(autocomplete)}" maxlength="${maxlength}" placeholder="${escapeHTML(placeholder)}"></label>`;
@@ -36,6 +36,14 @@ export function renderDetails(app) {
 
   app.root.innerHTML = bookingShell(app, content);
   const form = app.root.querySelector("#details-form");
+  // Save as the visitor types, so going Back (which re-renders the
+  // previous step) does not discard what was typed. app.setBookingStep()
+  // also harvests the form before leaving, as a second line of defence.
+  form.addEventListener("input", () => {
+    const values = Object.fromEntries(new FormData(form).entries());
+    delete values.hp;
+    booking.details = { ...booking.details, ...values };
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;

@@ -5,7 +5,7 @@
 // For live bookings, paste the deployed Google Apps Script web-app URL.
 export const API_URL = "https://script.google.com/macros/s/AKfycbxBgA_686f573rn9xfqwcLfAgKdAhBldaTitPtpv6s7Q2lnFYqW_h_lEj3w_SAQ42c/exec";
 
-export const BRAND_NAME = "Your Name";
+export const BRAND_NAME = "Minh Tran Le";
 
 export const CONTACT = {
   NAME: "Minh Tran Le",

@@ -122,14 +122,20 @@ The app expects exactly this API — see `src/api.js`:
 | ---- | ------- |
 | `GET ?action=config` | `{types:{work,lesson,hangout,priority:{label,fixed,min,max,approval,auth}}, step, leadHours, horizonDays}` |
 | `GET ?action=week&from=YYYY-MM-DD` | `{days:[{date, blocks:[{s,e,kind,pending}]}]}` (`s`/`e` = minutes from midnight) |
-| `GET ?action=check&type=lesson&code=…` | `{ok:true,name}` or `{err}` |
-| `GET ?action=check&type=priority&pw=…` | `{ok:true}` or `{err}` |
-| `POST` body `text/plain` JSON | `{ok:true,status:"pending"\|"confirmed"}` or `{err}` |
+| `POST` body `text/plain` JSON `{action:"check",type,code?\|pw?}` | `{ok:true,name?}` or `{err}` |
+| `POST` body `text/plain` JSON (booking) | `{ok:true,status:"pending"\|"confirmed"}` or `{err}` |
 
 The POST payload is `{type, date, start, dur, code?, pw?, name, email, note, hp}`
 with `start`/`dur` in minutes. `Content-Type: text/plain` avoids a CORS
 preflight. All rules (durations, step, lead window, horizon, approval mode)
 come from the backend `config` — nothing is hard-coded in the front end.
+
+> **Backend security (required):** credentials are sent only in POST bodies,
+> never in URL queries. The backend must re-verify the student code /
+> invitation password on every `createBooking` call — the front end's
+> "verified" flag is not trusted — and rate-limit `check` attempts
+> (e.g. 5 failed attempts per type per IP per 15 minutes, then a lockout
+> message), so codes and passwords cannot be brute-forced.
 
 ### Design tokens
 

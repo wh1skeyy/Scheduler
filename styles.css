@@ -2249,6 +2249,13 @@ legend {
   background: var(--glass-strong);
 }
 
+/* The desktop status panel sits over the session list: at 78% white the
+   rows still show through it. Make it (near-)solid so it reads as a panel,
+   not as glass over the list. */
+.corner-panel--status {
+  background: rgba(255, 255, 255, 0.96);
+}
+
 
 /* ==========================================================================
    Refinements: reference parity, motion and glass details

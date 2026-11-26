@@ -1,7 +1,7 @@
-import { CLOCK_LABEL } from "../config.js";
-import { formatResultDate, minutesToTime } from "../time.js";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
-import { bookingShell, bookingTitle } from "./booking-shell.js";
+import { CLOCK_LABEL } from "../config.js?v=3";
+import { formatResultDate, minutesToTime } from "../time.js?v=3";
+import { escapeHTML, focusScreenTitle, icon } from "../ui.js?v=3";
+import { bookingShell, bookingTitle } from "./booking-shell.js?v=3";
 
 export function renderResult(app) {
   const booking = app.state.booking;

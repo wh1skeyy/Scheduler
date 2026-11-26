@@ -1,7 +1,7 @@
 // Generic sample data used only when API_URL is empty. Nothing is persisted,
 // and demo credentials are accepted without being compared to a stored secret.
-import { TIMEZONE } from "./config.js";
-import { addDays, getSlotStatus, startOfWeek, todayKey } from "./time.js";
+import { TIMEZONE } from "./config.js?v=3";
+import { addDays, getSlotStatus, startOfWeek, todayKey } from "./time.js?v=3";
 
 export const DEMO_CONFIG = {
   types: {

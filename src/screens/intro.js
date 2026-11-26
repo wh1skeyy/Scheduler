@@ -1,15 +1,8 @@
-import { API_MODE } from "../api.js";
-import { checkAccess } from "../api.js";
-import { durationLabel } from "../time.js";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
-import { bookingShell, bookingTitle, TYPE_META } from "./booking-shell.js";
-
-const COPY = {
-  work: "",
-  lesson: "",
-  hangout: "",
-  priority: "",
-};
+import { API_MODE } from "../api.js?v=3";
+import { checkAccess } from "../api.js?v=3";
+import { durationLabel } from "../time.js?v=3";
+import { escapeHTML, focusScreenTitle, icon } from "../ui.js?v=3";
+import { bookingShell, bookingTitle, TYPE_META } from "./booking-shell.js?v=3";
 
 function fixedDurations(rule) {
   if (Array.isArray(rule.fixed)) return rule.fixed;
@@ -52,7 +45,7 @@ export function renderIntro(app) {
     ? `<button id="intro-continue" class="button button--primary" type="button"><span>CHOOSE A DAY</span>${icon("arrow")}</button>`
     : "";
 
-  const content = `${bookingTitle(`${meta.number} // BOOKING TYPE`, meta.label, COPY[booking.type])}
+  const content = `${bookingTitle(`${meta.number} // BOOKING TYPE`, meta.label, "")}
     <div class="rules-grid">
       <div class="rule-row"><span>DURATION</span><strong>${escapeHTML(durationRule)}</strong></div>
       <div class="rule-row"><span>NOTICE</span><strong>AT LEAST ${app.state.config.leadHours}H</strong></div>

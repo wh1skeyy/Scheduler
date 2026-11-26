@@ -8,6 +8,7 @@ import { renderWeek } from "./screens/week.js";
 import { renderTime } from "./screens/time.js";
 import { renderDetails } from "./screens/details.js";
 import { renderResult } from "./screens/result.js";
+import { statusPanelMarkup } from "./ui.js";
 import {
   addDays,
   durationLabel,
@@ -22,7 +23,7 @@ import {
   nowMinutes,
   startOfWeek,
   todayKey,
-} from "./time.js";
+} from "./time.js?v=3";
 
 /**
  * Main application class managing booking flow state and rendering.
@@ -62,6 +63,9 @@ class BookingApp {
       screen: "home",
       config: DEMO_CONFIG,
       currentWeek: null,
+      nextWeek: null,
+      weekFetchedAt: 0,
+      weekFetchAttemptedAt: 0,
       currentMonday: startOfWeek(todayKey(new Date(), TIMEZONE)),
       booking: null,
       loading: true,
@@ -76,7 +80,7 @@ class BookingApp {
       clockLabel: null,
       nowLine: null,
       currentStatus: null,
-      nextFree: null,
+      statusFooter: null,
       visualToggle: null,
       visualState: null,
     };
@@ -118,7 +122,7 @@ class BookingApp {
       clockLabel: root.querySelectorAll("[data-clock-label]"),
       nowLine: root.querySelectorAll("[data-now-line]"),
       currentStatus: root.querySelectorAll("[data-current-status]"),
-      nextFree: root.querySelectorAll("[data-next-free]"),
+      statusFooter: root.querySelectorAll("[data-status-footer]"),
       visualToggle: root.querySelectorAll("[data-visual-toggle]"),
       visualState: root.querySelectorAll("[data-visual-state]"),
     };
@@ -164,10 +168,21 @@ class BookingApp {
     // Render immediately so content isn't blank while fetching config.
     this.render();
     try {
-      const config = await getConfig();
+      // Config and both weeks are independent: fetch them in parallel.
+      // The next week is only needed for "next free" late in the week;
+      // a failure there must not fail the whole bootstrap.
+      const monday = this.state.currentMonday;
+      const [config, week, nextWeek] = await Promise.all([
+        getConfig(),
+        getWeek(monday),
+        getWeek(addDays(monday, 7)).catch(() => null),
+      ]);
       if (attempt !== this.bootstrapAttempt) return;
       this.state.config = config;
-      this.state.currentWeek = await getWeek(this.state.currentMonday);
+      this.state.currentWeek = week;
+      this.state.nextWeek = nextWeek;
+      this.state.weekFetchedAt = Date.now();
+      this.state.weekFetchAttemptedAt = Date.now();
     } catch (error) {
       if (attempt !== this.bootstrapAttempt) return;
       this.state.offline = API_MODE === "live";
@@ -213,6 +228,9 @@ class BookingApp {
     this.media.setActive(type);
     this.render();
     // Pre-fetch week data in the background so CHOOSE A DAY feels instant.
+    // Store it only: re-rendering here redraws step 0 and erases a typed
+    // access code (and any verification error shown on it). openWeek()
+    // uses booking.week directly, so no render is needed for the prefetch.
     getWeek(this.state.currentMonday).then((week) => {
       if (
         this.state.booking &&
@@ -222,7 +240,6 @@ class BookingApp {
         this.state.currentWeek = week;
         if (!this.state.booking.week) {
           this.state.booking.week = week;
-          this.render();
         }
       }
     }).catch(() => {});
@@ -239,8 +256,23 @@ class BookingApp {
     this.refreshCurrentWeek();
   }
 
+  // Save any typed details before leaving step 3, so Back does not
+  // discard them (they were previously only saved on submit).
+  saveDetailsFromForm() {
+    const booking = this.state.booking;
+    if (!booking || booking.step !== 3) return;
+    const form = this.root.querySelector("#details-form");
+    if (!form) return;
+    const values = Object.fromEntries(new FormData(form).entries());
+    for (const [key, value] of Object.entries(values)) {
+      if (key !== "hp") values[key] = value.trim();
+    }
+    booking.details = { ...booking.details, ...values };
+  }
+
   setBookingStep(step) {
     if (!this.state.booking) return;
+    this.saveDetailsFromForm();
     this.state.booking.step = step;
     this.state.booking.error = "";
     this.state.notice = "";
@@ -405,7 +437,7 @@ class BookingApp {
       booking.submitting = false;
       if (this.isTimeTakenError(error)) {
         try {
-          booking.week = await getWeek(booking.weekStart);
+          booking.week = await getWeek(booking.weekStart, { force: true });
           if (this.state.booking !== booking) return;
           booking.step = 2;
           booking.error = "";
@@ -426,37 +458,110 @@ class BookingApp {
   }
 
   async refreshCurrentWeek(render = false) {
-    if (this.state.offline) return;
+    // Called from goHome / after a booking / on a stale tick. Do not bail
+    // when offline: a retry here is how an open tab recovers after the
+    // API comes back. Only the caller decides whether to re-render.
     try {
-      this.state.currentWeek = await getWeek(this.state.currentMonday);
+      const monday = this.state.currentMonday;
+      const [week, nextWeek] = await Promise.all([
+        getWeek(monday, { force: true }),
+        getWeek(addDays(monday, 7), { force: true }).catch(() => null),
+      ]);
+      this.state.currentWeek = week;
+      this.state.nextWeek = nextWeek;
+      this.state.offline = false;
+      this.state.weekFetchedAt = Date.now();
+      this.state.weekFetchAttemptedAt = Date.now();
       if (render && this.state.screen === "home") this.render();
       else {
         this.updateLiveUI();
         this.updateLiveClock();
       }
     } catch {
+      this.state.offline = API_MODE === "live";
+      this.state.weekFetchAttemptedAt = Date.now();
       // A stale status panel is preferable to replacing an in-progress booking.
     }
   }
 
+  // Refetch when the week is stale or the Monday has rolled over (e.g. an
+  // open tab left running past Sunday midnight). Throttled to 5 minutes
+  // so the 30 s tick below does not hammer the API.
+  async refreshIfStale() {
+    const now = new Date();
+    const monday = startOfWeek(todayKey(now, this.timeZone));
+    if (monday !== this.state.currentMonday) {
+      this.state.currentMonday = monday;
+      await this.refreshCurrentWeek();
+      return;
+    }
+    if (Date.now() - this.state.weekFetchedAt > 5 * 60_000) {
+      await this.refreshCurrentWeek();
+      return;
+    }
+    this.updateLiveUI();
+  }
+
+  // The status panels are static HTML, so rebuild them when their data changes.
+  // Rebuild only when the week data itself changes (not every minute for
+  // the clock): replacing innerHTML replays the bar-in animation and, with
+  // a live region, would re-announce the whole grid. The clock / next-free
+  // footer is updated as live text in updateLiveUI() instead.
+  updateStatusPanels() {
+    const signature = JSON.stringify(this.state.currentWeek?.days || null) +
+      `|offline:${this.state.offline}`;
+    const html = statusPanelMarkup(this.state.currentWeek, this.state.config, new Date(), {
+      offline: this.state.offline,
+      nextWeek: this.state.nextWeek,
+    });
+    this.root.querySelectorAll("[data-status-panel]").forEach((element) => {
+      if (element._statusSignature === signature) return;
+      element._statusSignature = signature;
+      element.innerHTML = html;
+    });
+  }
+
   updateLiveUI() {
-    if (!this.state.currentWeek) return;
+    this.updateStatusPanels();
     this._refreshLiveElements();
     const now = new Date();
+    // No week data: say so instead of leaving "CHECKING…" / "FREE NOW"
+    // on screen. While the bootstrap is still loading, leave the
+    // checking text alone.
+    if (!this.state.currentWeek) {
+      if (!this.state.loading) {
+        this._liveElements.currentStatus?.forEach((element) => {
+          element.textContent = "UNAVAILABLE";
+        });
+        this._liveElements.statusFooter?.forEach((element) => {
+          element.textContent = "UNAVAILABLE";
+        });
+      }
+      return;
+    }
     const status = getLiveStatus(this.state.currentWeek, now, this.timeZone);
     this._liveElements.currentStatus?.forEach((element) => {
       element.textContent = status.label;
     });
+    // Search next week too, so late Sunday does not say "NONE THIS WEEK"
+    // when Monday morning is free.
     const next = findNextFreeInWeek(this.state.currentWeek, {
       ...this.slotOptions(),
       duration: this.state.config.step,
+      nextWeek: this.state.nextWeek,
     });
     const today = todayKey(now, this.timeZone);
     const nextText = next
       ? `NEXT FREE: ${next.date === today ? "TODAY" : formatShortDate(next.date)} ${minutesToTime(next.start)} ${this.clockLabel}`
       : "NEXT FREE: NONE THIS WEEK";
-    this._liveElements.nextFree?.forEach((element) => {
-      element.textContent = nextText;
+    // NOTE: the "NEXT FREE START" button in the time screen also used to
+    // carry [data-next-free], so this block overwrote the button (and its
+    // icon) with the status text. It is deliberately not targeted here:
+    // the status text lives in the status-panel footer ([data-status-footer]),
+    // which statusPanelMarkup renders, and updateStatusPanels rebuilds.
+    const footerText = `${formatLiveClock(now, this.timeZone)} ${this.clockLabel} // ${nextText}`;
+    this._liveElements.statusFooter?.forEach((element) => {
+      element.textContent = footerText;
     });
   }
 
@@ -497,9 +602,10 @@ class BookingApp {
 
 export const app = new BookingApp();
 app.bootstrap();
-// Clock updates every second for live feel; status panel updates every 30s.
+// Clock updates every second for live feel; the 30 s tick refreshes the
+// status text and refetches the week when it is stale or Monday rolled over.
 setInterval(() => app.updateLiveClock(), 1_000);
-setInterval(() => app.updateLiveUI(), 30_000);
+setInterval(() => app.refreshIfStale(), 30_000);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) app.updateLiveUI();
+  if (!document.hidden) app.refreshIfStale();
 });

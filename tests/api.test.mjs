@@ -7,6 +7,16 @@ import {
   getDemoConfig,
   getDemoWeek,
 } from "../src/demo-data.js";
+import { addDays, startOfWeek, todayKey } from "../src/time.js";
+import { TIMEZONE } from "../src/config.js";
+
+// All booking dates are generated relative to today: hard-coded
+// Nov 2026 dates went stale (partly in the past) and the midnight test
+// then failed with "PAST DATE" instead of "END CAPPED AT 24:00".
+const today = todayKey(new Date(), TIMEZONE);
+const thisMonday = startOfWeek(today);
+const nextMonday = addDays(thisMonday, 7);
+const nextWednesday = addDays(nextMonday, 2);
 
 test("demo config exposes every type with limits and rules", async () => {
   const config = await getDemoConfig();
@@ -22,10 +32,10 @@ test("demo config exposes every type with limits and rules", async () => {
 });
 
 test("demo week returns seven Monday-anchored days", async () => {
-  const week = await getDemoWeek("2026-11-25");
+  const week = await getDemoWeek(thisMonday);
   assert.equal(week.days.length, 7);
-  assert.equal(week.days[0].date, "2026-11-23");
-  assert.equal(week.days[6].date, "2026-11-29");
+  assert.equal(week.days[0].date, thisMonday);
+  assert.equal(week.days[6].date, addDays(thisMonday, 6));
 });
 
 test("demo access check validates credentials without storing secrets", async () => {
@@ -39,7 +49,7 @@ test("demo access check validates credentials without storing secrets", async ()
 test("demo booking rejects invalid rules and honours overlaps", async () => {
   const clash = await demoCreateBooking({
     type: "work",
-    date: "2026-11-24",
+    date: nextMonday,
     start: 570,
     dur: 60,
     hp: "",
@@ -48,7 +58,7 @@ test("demo booking rejects invalid rules and honours overlaps", async () => {
 
   const midnight = await demoCreateBooking({
     type: "priority",
-    date: "2026-11-25",
+    date: nextMonday,
     start: 1380,
     dur: 120,
     hp: "",
@@ -57,7 +67,7 @@ test("demo booking rejects invalid rules and honours overlaps", async () => {
 
   const fixed = await demoCreateBooking({
     type: "lesson",
-    date: "2026-11-27",
+    date: nextWednesday,
     start: 720,
     dur: 60,
     hp: "",
@@ -68,7 +78,7 @@ test("demo booking rejects invalid rules and honours overlaps", async () => {
 test("demo booking adds the block for the chosen rule", async () => {
   const result = await demoCreateBooking({
     type: "priority",
-    date: "2026-12-09",
+    date: nextWednesday,
     start: 1200,
     dur: 120,
     hp: "",
@@ -76,7 +86,7 @@ test("demo booking adds the block for the chosen rule", async () => {
   });
   assert.deepEqual(result, { ok: true, status: "confirmed" });
   // Re-fetch: getDemoWeek returns a fresh clone of the mutated cache.
-  const week = await getDemoWeek("2026-12-07");
-  const wednesday = week.days.find((d) => d.date === "2026-12-09");
+  const week = await getDemoWeek(nextMonday);
+  const wednesday = week.days.find((d) => d.date === nextWednesday);
   assert.ok(wednesday.blocks.some((b) => b.s === 1200 && b.e === 1320));
 });

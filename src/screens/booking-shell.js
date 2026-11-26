@@ -1,5 +1,5 @@
-import { CLOCK_LABEL } from "../config.js";
-import { escapeHTML, icon } from "../ui.js";
+import { CLOCK_LABEL } from "../config.js?v=3";
+import { escapeHTML, icon } from "../ui.js?v=3";
 
 export const TYPE_ORDER = ["work", "lesson", "hangout", "priority"];
 export const TYPE_META = {

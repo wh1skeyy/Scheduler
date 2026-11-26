@@ -1,4 +1,4 @@
-import { addDays, formatWeekRange, startOfWeek, todayKey } from "../time.js";
+import { addDays, formatWeekRange, startOfWeek, todayKey } from "../time.js?v=3";
 import {
   escapeHTML,
   focusScreenTitle,
@@ -7,8 +7,8 @@ import {
   timelineAria,
   timelineMarkup,
   timelineScaleMarkup,
-} from "../ui.js";
-import { bookingShell, bookingTitle } from "./booking-shell.js";
+} from "../ui.js?v=3";
+import { bookingShell, bookingTitle } from "./booking-shell.js?v=3";
 
 export function renderWeek(app) {
   const booking = app.state.booking;
