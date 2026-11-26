@@ -1,12 +1,11 @@
 import { CLOCK_LABEL } from "../config.js";
 import {
   durationLabel,
-  findNextFreeStart,
   formatResultDate,
   getSlotStatus,
   minutesToTime,
 } from "../time.js";
-import { escapeHTML, focusScreenTitle, icon } from "../ui.js";
+import { escapeHTML, focusScreenTitle, icon, legendMarkup, timelineAria, timelineMarkup, timelineScaleMarkup } from "../ui.js";
 import { bookingShell, bookingTitle } from "./booking-shell.js";
 
 function fixedDurations(rule) {
@@ -34,6 +33,12 @@ export function renderTime(app) {
       <div class="quick-duration"><span class="control-label">QUICK SELECT</span><div class="chip-row">${quickDurations(rule, step).map((value) => `<button class="chip" type="button" data-duration="${value}" aria-pressed="${booking.duration === value}">${durationLabel(value)}</button>`).join("")}</div></div>`;
 
   const content = `${title}
+    <div class="day-indicator">
+      <div class="day-indicator__head"><span>AVAILABLE ON THIS DAY</span><strong data-day-selection-label></strong></div>
+      <div data-day-timeline></div>
+      <div class="week-scale">${timelineScaleMarkup()}</div>
+      ${legendMarkup()}
+    </div>
     <div class="time-layout">
       <section class="time-control" aria-labelledby="start-label">
         <span id="start-label" class="control-label">START TIME // ${step}-MINUTE STEPS</span>
@@ -44,7 +49,7 @@ export function renderTime(app) {
     </div>
     <div class="slot-status" data-slot-status role="status"><span class="status-dot"></span><strong data-slot-status-text></strong><span data-slot-range></span></div>
     <p class="form-error" data-time-message role="alert"></p>
-    <div class="time-actions"><button class="button" type="button" data-next-free>${icon("clock")}<span>NEXT FREE START</span></button><button class="button button--primary" type="button" data-time-continue><span>CONTINUE</span>${icon("arrow")}</button></div>
+    <div class="time-actions"><button class="button button--primary" type="button" data-time-continue><span>CONTINUE</span>${icon("arrow")}</button></div>
     <p class="timezone-note">ALL TIMES ${escapeHTML(CLOCK_LABEL)} // DATE DOES NOT ROLL OVER AFTER 24:00.</p>`;
 
   app.root.innerHTML = bookingShell(app, content);
@@ -70,6 +75,43 @@ export function renderTime(app) {
     const statusElement = app.root.querySelector("[data-slot-status]");
     statusElement.classList.toggle("is-free", status.ok);
     statusElement.classList.toggle("is-error", !status.ok);
+    // Single-day indicator: same 24-hour bar as the week screen, for
+    // this day only. The bar is rendered once; afterwards only the
+    // selection span is moved (left / width / class), so a drag, a
+    // keyboard focus, or a pointer capture on it is never destroyed
+    // by re-rendering, and the CSS transition on left / width can
+    // animate the move instead of jumping frame by frame.
+    const timelineElement = app.root.querySelector("[data-day-timeline]");
+    if (timelineElement && day) {
+      const selection = { start: booking.start, duration: booking.duration, ok: status.ok, resizable: fixed.length === 0 };
+      const existingTimeline = timelineElement.querySelector(".timeline");
+      if (!existingTimeline) {
+        timelineElement.innerHTML = timelineMarkup(day, {
+          ...app.state.config,
+          now: new Date(),
+          timeZone: app.timeZone,
+          selection,
+        });
+      } else {
+        const selectionElement = timelineElement.querySelector("[data-day-selection]");
+        if (selectionElement) {
+          const left = Math.max(0, Math.min(100, (booking.start / 1440) * 100));
+          const width = Math.max(0, Math.min(100 - left, (booking.duration / 1440) * 100));
+          selectionElement.style.left = `${left}%`;
+          selectionElement.style.width = `${width}%`;
+          selectionElement.classList.toggle("is-free", status.ok);
+          selectionElement.classList.toggle("is-error", !status.ok);
+          selectionElement.title = `Selected ${minutesToTime(booking.start)}–${minutesToTime(booking.start + booking.duration)} ${CLOCK_LABEL} — drag to move, drag an end to change duration`;
+          selectionElement.setAttribute("aria-valuenow", String(booking.start));
+          selectionElement.setAttribute("aria-valuetext", `${minutesToTime(booking.start)} to ${minutesToTime(booking.start + booking.duration)}`);
+        }
+        existingTimeline.setAttribute("aria-label", timelineAria(day, selection));
+      }
+    }
+    const selectionLabel = app.root.querySelector("[data-day-selection-label]");
+    if (selectionLabel) {
+      selectionLabel.textContent = `${minutesToTime(booking.start)}–${minutesToTime(booking.start + booking.duration)} ${CLOCK_LABEL} · ${status.ok ? "FREE" : "UNAVAILABLE"}`;
+    }
     app.root.querySelector("[data-slot-status-text]").textContent = status.label;
     app.root.querySelector("[data-slot-range]").textContent = `${minutesToTime(booking.start)}–${minutesToTime(booking.start + booking.duration)} ${CLOCK_LABEL}`;
     app.root.querySelector("[data-time-continue]").disabled = !status.ok;
@@ -107,27 +149,82 @@ export function renderTime(app) {
   app.root.querySelectorAll("[data-duration]").forEach((button) => {
     button.addEventListener("click", () => changeDuration(Number(button.dataset.duration)));
   });
-  app.root.querySelector("[data-next-free]").addEventListener("click", async () => {
-    const btn = app.root.querySelector("[data-next-free]");
-    btn.disabled = true;
-    btn.dataset.originalText = btn.innerHTML;
-    btn.innerHTML = `${icon("clock")}<span>SEARCHING…</span>`;
-    try {
-      const status = getSlotStatus(day, { ...options(), start: booking.start, duration: booking.duration });
-      const from = status.ok ? booking.start + step : booking.start;
-      const next = findNextFreeStart(day, from, booking.duration, options());
-      const message = app.root.querySelector("[data-time-message]");
-      if (next === null) {
-        message.textContent = "No later free start fits on this day. Go back and choose another date.";
-        return;
-      }
-      booking.start = next;
-      message.textContent = "";
-      app.announce(`Next free start: ${minutesToTime(next)} ${CLOCK_LABEL}`);
-      update();
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = btn.dataset.originalText || `${icon("clock")}<span>NEXT FREE START</span>`;
+  app.root.querySelector("[data-time-continue]").addEventListener("click", () => app.setBookingStep(3));
+  // Draggable selection bar. Pointer Events cover mouse, pen and
+  // touch with one code path (touch-action: none in CSS stops the
+  // page scrolling while dragging on mobile). Dragging the body
+  // moves the start, keeping the duration; dragging an end handle
+  // resizes the duration. Fixed-duration types (lesson) have no
+  // handles, so only moving is possible there. Every move snaps
+  // to the configured step, and update() moves the existing span
+  // in place, so pointer capture and focus survive the drag.
+  let drag = null;
+  const timelineContainer = app.root.querySelector("[data-day-timeline]");
+  function snapMinutes(value) {
+    return Math.round(value / step) * step;
+  }
+  function endDrag() {
+    if (!drag) return;
+    drag.element?.classList.remove("is-dragging");
+    window.removeEventListener("pointermove", onDragMove);
+    window.removeEventListener("pointerup", endDrag);
+    window.removeEventListener("pointercancel", endDrag);
+    drag = null;
+    update();
+  }
+  function onDragMove(event) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const timeline = timelineContainer?.querySelector(".timeline");
+    const width = timeline?.getBoundingClientRect().width || 0;
+    if (!width) return;
+    const deltaMinutes = ((event.clientX - drag.startX) / width) * 1440;
+    const minDuration = rule?.min ?? step;
+    const maxDuration = rule?.max ?? 1440;
+    if (drag.mode === "resize-end") {
+      booking.duration = Math.max(minDuration, Math.min(maxDuration, 1440 - drag.start, snapMinutes(drag.duration + deltaMinutes)));
+    } else if (drag.mode === "resize-start") {
+      const end = drag.start + drag.duration;
+      let newStart = snapMinutes(drag.start + deltaMinutes);
+      newStart = Math.max(0, Math.min(end - minDuration, newStart));
+      newStart = Math.max(newStart, end - maxDuration);
+      booking.start = newStart;
+      booking.duration = end - newStart;
+    } else {
+      booking.start = Math.max(0, Math.min(1440 - booking.duration, snapMinutes(drag.start + deltaMinutes)));
+    }
+    app.root.querySelector("[data-time-message]").textContent = "";
+    update();
+  }
+  timelineContainer?.addEventListener("pointerdown", (event) => {
+    const selectionElement = event.target.closest("[data-day-selection]");
+    if (!selectionElement || !day) return;
+    const handle = event.target.closest("[data-selection-handle]");
+    const mode = handle?.dataset.selectionHandle === "start"
+      ? "resize-start"
+      : handle?.dataset.selectionHandle === "end"
+        ? "resize-end"
+        : "move";
+    if (mode !== "move" && fixed.length) return;
+    event.preventDefault();
+    selectionElement.classList.add("is-dragging");
+    drag = {
+      pointerId: event.pointerId,
+      mode,
+      startX: event.clientX,
+      start: booking.start,
+      duration: booking.duration,
+      element: selectionElement,
+    };
+    window.addEventListener("pointermove", onDragMove);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+  });
+  // Keyboard equivalent: focus the bar and use ← / → to step the start.
+  timelineContainer?.addEventListener("keydown", (event) => {
+    if (!event.target.closest("[data-day-selection]")) return;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      changeStart(event.key === "ArrowLeft" ? -1 : 1);
     }
   });
   app.root.querySelector("[data-time-continue]").addEventListener("click", () => app.setBookingStep(3));

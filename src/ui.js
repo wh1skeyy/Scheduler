@@ -45,12 +45,14 @@ export function icon(name, className = "") {
   return `<svg class="icon ${escapeHTML(className)}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.arrow}</svg>`;
 }
 
-export function timelineAria(day) {
+export function timelineAria(day, selection = null) {
   const blocks = (day.blocks || []).map(
     (block) =>
       `${blockLabel(block)} ${minutesToTime(block.s)} to ${minutesToTime(block.e)}`,
   );
-  return `${formatShortDate(day.date)}. ${blocks.length ? blocks.join("; ") : "Free all day"}.`;
+  const base = `${formatShortDate(day.date)}. ${blocks.length ? blocks.join("; ") : "Free all day"}.`;
+  if (!selection) return base;
+  return `${base} Selected ${minutesToTime(selection.start)} to ${minutesToTime(selection.start + selection.duration)}.`;
 }
 
 // Returns a presentational 24-hour bar. Interactive day labels wrap it in a
@@ -79,7 +81,23 @@ export function timelineMarkup(day, options = {}) {
   const nowMarkup = isToday
     ? `<span class="timeline__now" data-now-line style="left:${(nowMinutes(now, timeZone) / 1440) * 100}%" title="Now ${minutesToTime(nowMinutes(now, timeZone))} ${escapeHTML(CLOCK_LABEL)}"></span>`
     : "";
-  return `<div class="timeline ${options.compact ? "timeline--compact" : ""}" role="img" aria-label="${escapeHTML(timelineAria(day))}">${blocks}${leadMarkup}${nowMarkup}</div>`;
+  // Single-day selection overlay, used by the time screen. It is drawn
+  // over the occupied / lead blocks so an overlap is visible in red,
+  // and in black when the selected start + duration is free. It is
+  // deliberately taller than the bar (see styles.css) and has drag
+  // handles on both ends when the duration is not fixed.
+  const selection = options.selection;
+  const selectionMarkup = selection
+    ? (() => {
+        const left = Math.max(0, Math.min(100, (selection.start / 1440) * 100));
+        const width = Math.max(0, Math.min(100 - left, (selection.duration / 1440) * 100));
+        const handles = selection.resizable === false
+          ? ""
+          : `<span class="timeline__selection-handle timeline__selection-handle--start" data-selection-handle="start" aria-hidden="true"></span><span class="timeline__selection-handle timeline__selection-handle--end" data-selection-handle="end" aria-hidden="true"></span>`;
+        return `<span class="timeline__selection ${selection.ok ? "is-free" : "is-error"}" data-day-selection tabindex="0" role="slider" aria-label="Selected start time" aria-valuemin="0" aria-valuemax="1440" aria-valuenow="${selection.start}" aria-valuetext="${minutesToTime(selection.start)} to ${minutesToTime(selection.start + selection.duration)}" style="left:${left}%;width:${width}%" title="Selected ${minutesToTime(selection.start)}–${minutesToTime(selection.start + selection.duration)} ${escapeHTML(CLOCK_LABEL)} — drag to move, drag an end to change duration">${handles}</span>`;
+      })()
+    : "";
+  return `<div class="timeline ${options.compact ? "timeline--compact" : ""}" role="img" aria-label="${escapeHTML(timelineAria(day, selection))}">${blocks}${leadMarkup}${nowMarkup}${selectionMarkup}</div>`;
 }
 
 export function timelineScaleMarkup() {

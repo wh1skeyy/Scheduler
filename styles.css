@@ -496,6 +496,104 @@ legend {
   background: var(--error);
 }
 
+/* Selected start + duration on the time screen. Drawn above the
+   occupied / lead blocks so an overlap is visible in red. Matches
+   the timeline height exactly (32px). left/width are controlled by
+   JS and animated with CSS transitions. */
+.timeline__selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  cursor: grab;
+  touch-action: none;
+  outline: 1px solid #fff;
+  outline-offset: -1px;
+  /* Smooth stepping: left / width animate on every +/- click,
+     duration chip, or duration change. While dragging, the
+     transition is switched off so the bar follows the pointer. */
+  transition: left 180ms ease, width 180ms ease;
+}
+
+.timeline__selection:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.timeline__selection.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.timeline__selection.is-free {
+  background: var(--ink);
+}
+
+.timeline__selection.is-error {
+  background: var(--error);
+}
+
+/* Resize handles. 12px wide, centred on each end of the bar, so
+   the grab target is usable on touch as well as with a mouse. */
+.timeline__selection-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.timeline__selection-handle--start {
+  left: -6px;
+}
+
+.timeline__selection-handle--end {
+  right: -6px;
+}
+
+.timeline__selection-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 1px;
+}
+
+/* Single-day indicator on the time screen */
+.day-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.day-indicator .timeline {
+  height: 32px;
+}
+
+.day-indicator__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  font: var(--label);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.day-indicator__head strong {
+  color: var(--ink);
+}
+
 .timeline-scale {
   display: flex;
   justify-content: space-between;
